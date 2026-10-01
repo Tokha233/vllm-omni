@@ -26,11 +26,25 @@ change. It then binds the selected operator set, reuses Omni's existing
 dtype already selected by decode autocast. Unsupported model contracts, tensor
 inputs, execution modes, and devices retain the original implementation.
 
-Hardware dispatch is an explicit allowlist. SM90, SM100, and SM103 are enabled;
+Hardware dispatch is an explicit allowlist. SM90, SM100, SM103, and SM120 are enabled;
 other capabilities fall back to the reference path. Bit-exact full-decode and
 operator evidence has been collected on SM90, with independent full-decode and
 stress validation on SM103. Enabling a target and claiming it as validated are
 kept separate so the evidence remains clear.
+
+SM120 was validated on one RTX 5090 D v2 (24 GB), driver 580.126.20,
+PyTorch 2.13.0+cu130, Triton 3.7.1, and vLLM 0.30.0. With official H3 VAE
+weights and FP16 decode autocast, a sampled `[1, 24, 37, 32, 48]` latent decoded
+to 124 frames at 512x768. Warmed ABBA median decode latency decreased from
+6202.364 to 4631.699 ms (25.32%). RGB8 and pre-conversion FP32 output were
+bit-exact; three additional cropped, zero, and noise latent inputs also passed
+full FP32 equality. The small 195-row scaled-residual operator was slower in
+isolation; the complete decode improved. These are video-VAE measurements,
+not end-to-end generation or serving throughput.
+
+The [reproduction commands and scripts](https://github.com/Tokha233/ComfyUI-H3-SpeedKit/tree/d6d6da7/experiments/omni-migration-1002)
+and [raw measurements](https://github.com/Tokha233/ComfyUI-H3-SpeedKit/tree/d6d6da7/evidence/omni-migration-1002)
+pin the baseline, official model revision, autocast, warmup, and timing scope.
 
 ## Extending platform support
 

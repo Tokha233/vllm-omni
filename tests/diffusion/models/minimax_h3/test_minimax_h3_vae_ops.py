@@ -60,7 +60,7 @@ def _failing_norm_input(_module, _hidden_states):
     raise RuntimeError("unsupported remote normalization semantics")
 
 
-@pytest.mark.parametrize(("batch", "sequence"), [(1, 1), (1, 195), (2, 1797)])
+@pytest.mark.parametrize(("batch", "sequence"), [(1, 1), (1, 195), (2, 1797), (1, 8192), (1, 32768)])
 def test_h3_vae_qk_norm_rope_is_bit_exact(batch, sequence):
     device, operators = _selected_operators()
 
@@ -88,12 +88,13 @@ def test_h3_vae_qk_norm_rope_is_bit_exact(batch, sequence):
     assert torch.equal(actual_k, expected_k)
 
 
-def test_h3_vae_scaled_residual_is_bit_exact():
+@pytest.mark.parametrize("rows", [1, 195, 8192, 32768])
+def test_h3_vae_scaled_residual_is_bit_exact(rows):
     device, operators = _selected_operators()
 
     torch.manual_seed(29)
-    residual = torch.randn(195, 2048, device=device, dtype=torch.float32)
-    branch = torch.randn(195, 2048, device=device, dtype=torch.float16)
+    residual = torch.randn(rows, 2048, device=device, dtype=torch.float32)
+    branch = torch.randn(rows, 2048, device=device, dtype=torch.float16)
     scale = torch.randn(2048, device=device, dtype=torch.float32)
     expected = residual + branch * scale
 
@@ -376,10 +377,10 @@ def test_h3_vae_dispatch_selects_supported_cuda_capabilities(monkeypatch):
     monkeypatch.setattr(dispatch, "HAS_TRITON", True)
     monkeypatch.setattr(dispatch, "current_omni_platform", platform)
 
-    for capability in (90, 100, 103):
+    for capability in (90, 100, 103, 120):
         platform.get_device_capability.return_value.to_int.return_value = capability
         assert dispatch.resolve_h3_vae_operators(torch.device("cuda:0")) is not None
 
-    for capability in (89, 101, 110):
+    for capability in (89, 101, 110, 121):
         platform.get_device_capability.return_value.to_int.return_value = capability
         assert dispatch.resolve_h3_vae_operators(torch.device("cuda:0")) is None
