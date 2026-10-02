@@ -24,7 +24,7 @@ from vllm.model_executor.layers.fused_moe.all2all_utils import (
 )
 from vllm.utils.torch_utils import PIN_MEMORY
 from vllm.v1.core.sched.output import GrammarOutput, SchedulerOutput
-from vllm.v1.outputs import AsyncModelRunnerOutput, ModelRunnerOutput, RoutedExpertsTensors
+from vllm.v1.outputs import AsyncModelRunnerOutput, ModelRunnerOutput
 from vllm.v1.worker.gpu.eplb_utils import step_eplb_after
 
 from vllm_omni.data_entry_keys import OmniPayload, flatten_payload
@@ -151,7 +151,9 @@ class OmniARModelRunner(OmniGPUModelRunner):
         hidden_states = self.execute_model_state.hidden_states
         finished_req_ids = self.execute_model_state.finished_req_ids
         ec_connector_output = self.execute_model_state.ec_connector_output
-        routed_experts = self.execute_model_state.routed_experts
+        pending_aux_output = None
+        if self.aux_output_connector is not None:
+            pending_aux_output = self.aux_output_connector.prepare_output(input_batch)
         self.execute_model_state = None
 
         # --- Omni: reconstruct raw model output and post-process ---
@@ -234,6 +236,12 @@ class OmniARModelRunner(OmniGPUModelRunner):
             self.req_states.num_computed_tokens.gpu,
             self.req_states.prompt_len.np,
         )
+        prompt_token_id_logprobs_dict = self.prompt_logprobs_worker.compute_prompt_token_id_logprobs(
+            self.model.compute_logits,
+            text_hidden,
+            input_batch,
+            self.req_states.prompt_len.np,
+        )
 
         # --- Omni: pooler_output ---
         engine_output_type = getattr(self.vllm_config.model_config, "engine_output_type", "text")
@@ -245,6 +253,7 @@ class OmniARModelRunner(OmniGPUModelRunner):
             req_id_to_index={rid: i for i, rid in enumerate(input_batch.req_ids)},
             sampled_token_ids=None,  # type: ignore[arg-type]
             prompt_logprobs_dict=prompt_logprobs_dict,
+            prompt_token_id_logprobs_dict=prompt_token_id_logprobs_dict,
             kv_connector_output=None,
         )
         model_runner_output.kv_extracted_req_ids = kv_extracted
@@ -265,7 +274,7 @@ class OmniARModelRunner(OmniGPUModelRunner):
             finalize_output=(None if materialize_native else self._finalize_native_data_plane_output),
             finalize_multimodal=sampling_output.finalize_multimodal,
             check_ep_fault=self.check_ep_fault,
-            routed_experts=routed_experts,
+            pending_aux_output=pending_aux_output,
             extra_multimodal_outputs=extra_outputs,
         )
         self._release_multimodal_snapshot(snapshot_slot, async_output.copy_event)
@@ -678,13 +687,13 @@ class OmniAsyncOutput(AsyncModelRunnerOutput):
         finalize_output: Any | None = None,
         finalize_multimodal: Any | None = None,
         check_ep_fault: bool = False,
-        routed_experts: RoutedExpertsTensors | None = None,
+        pending_aux_output: Any | None = None,
         extra_multimodal_outputs: tuple[dict[str, Any], torch.cuda.Event] | None = None,
     ):
         self.model_runner_output = model_runner_output
         self.sampler_output = sampler_output
         self.num_sampled_tokens = num_sampled_tokens
-        self.routed_experts = routed_experts
+        self.pending_aux_output = pending_aux_output
         self.copy_event = copy_event if copy_event is not None else torch.cuda.Event(blocking=True)
         self._async_chunk = bool(async_chunk)
         self._finalize_output = finalize_output
@@ -739,9 +748,15 @@ class OmniAsyncOutput(AsyncModelRunnerOutput):
             self.sampling_mask_tensors = None
             if sampler_output.sampling_mask_tensors is not None:
                 self.sampling_mask_tensors = sampler_output.sampling_mask_tensors.to_cpu_nonblocking()
-            self.routed_experts_cpu = None
-            if routed_experts is not None:
-                self.routed_experts_cpu = routed_experts.to_cpu_nonblocking()
+            if pending_aux_output is not None:
+                pending_aux_output.enqueue_cpu_copy(
+                    num_sampled=self.num_sampled_tokens_np,
+                    num_rejected=_async_copy_to_np(
+                        sampler_output.num_rejected,
+                        copy_stream=copy_stream,
+                        pin_memory=pin_memory,
+                    ),
+                )
 
             # Logprobs
             self.logprobs_tensors = None
@@ -759,6 +774,10 @@ class OmniAsyncOutput(AsyncModelRunnerOutput):
             self.prompt_logprobs_dict = {
                 k: v.to_cpu_nonblocking() if v is not None else None
                 for k, v in self.model_runner_output.prompt_logprobs_dict.items()
+            }
+            self.prompt_token_id_logprobs_dict = {
+                k: _async_copy_tensor(v, copy_stream=copy_stream, pin_memory=pin_memory)
+                for k, v in self.model_runner_output.prompt_token_id_logprobs_dict.items()
             }
             if check_ep_fault:
                 has_fault = get_ep_all2all_manager().query_fault()
@@ -820,8 +839,8 @@ class OmniAsyncOutput(AsyncModelRunnerOutput):
         self.model_runner_output.sampled_token_ids = sampled_token_ids
         if self.sampling_mask_tensors is not None:
             self.model_runner_output.sampling_masks = self.sampling_mask_tensors.tolists()
-        if self.routed_experts_cpu is not None:
-            self.model_runner_output.routed_experts = self.routed_experts_cpu.tolists()
+        if self.pending_aux_output is not None:
+            self.model_runner_output.aux_output_connector_output = self.pending_aux_output.process_output()
         self.model_runner_output.sampled_token_ids_materialized = True
 
         # Logprobs
@@ -832,6 +851,7 @@ class OmniAsyncOutput(AsyncModelRunnerOutput):
         if self.logprobs_tensors is not None:
             self.model_runner_output.logprobs = self.logprobs_tensors.tolists()
         self.model_runner_output.prompt_logprobs_dict = self.prompt_logprobs_dict
+        self.model_runner_output.prompt_token_id_logprobs_dict = self.prompt_token_id_logprobs_dict
 
         if self._has_fault is not None and self._has_fault.item():
             mask = get_ep_all2all_manager().query_active_mask()

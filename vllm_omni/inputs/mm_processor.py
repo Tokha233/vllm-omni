@@ -26,14 +26,24 @@ class OmniMultiModalProcessor(BaseMultiModalProcessor[_I]):
     def _apply_hf_processor_main(
         self,
         mm_items: MultiModalDataItems,
-        hf_processor_mm_kwargs: Mapping[str, object],
+        hf_kwargs: Mapping[str, object],
     ) -> BatchFeature:
-        kwargs = dict(hf_processor_mm_kwargs)
+        kwargs = dict(hf_kwargs)
         prompt = kwargs.pop(self._OMNI_PROMPT_TEXT_KEY, None)
         if prompt is None:
             prompt = self.dummy_inputs.get_dummy_text(mm_items.get_all_counts())
         valid_items = mm_items.select({key for key, count in mm_items.get_all_counts().items() if count > 0})
-        mm_data, passthrough = self._get_hf_mm_data(valid_items)
+        # Raw processor/passthrough data (upstream removed `_get_hf_mm_data` in
+        # favour of `_get_hf_mm_inputs`, which also renames `audios` -> `audio`
+        # and injects a dummy text key). Omni's custom `_call_hf_processor`
+        # subclasses still expect the un-renamed keys, so extract them here.
+        mm_data: dict[str, object] = {}
+        passthrough: dict[str, object] = {}
+        for items in valid_items.values():
+            if not items:
+                continue
+            mm_data.update(items.get_processor_data())
+            passthrough.update(items.get_passthrough_data())
         result = self._call_hf_processor(str(prompt), dict(mm_data), kwargs, {})
         result.update(passthrough)
         return result

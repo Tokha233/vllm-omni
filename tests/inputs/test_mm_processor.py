@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 from transformers import BatchFeature
+from vllm.multimodal.parse import AudioProcessorItems, ImageProcessorItems, MultiModalDataItems
 
 from vllm_omni.inputs.mm_processor import OmniMultiModalProcessor
 
@@ -24,10 +25,14 @@ def test_custom_processor_bridge_preserves_prompt_kwargs_and_passthrough(counts,
 
     processor = object.__new__(Processor)
     processor.dummy_inputs = SimpleNamespace(get_dummy_text=Mock(return_value="dummy"))
-    processor._get_hf_mm_data = Mock(return_value=({"audios": ["wave"]}, {"embedding": "preserve"}))
     processor._call_hf_processor = Mock(return_value=BatchFeature({"features": "processed"}))
-    items = Mock()
-    items.get_all_counts.return_value = counts
+
+    class AudioItems(AudioProcessorItems):
+        def get_passthrough_data(self):
+            return {"embedding": "preserve"}
+
+    items = MultiModalDataItems({"audio": AudioItems(["wave"]), "image": ImageProcessorItems([])} if counts else {})
+    items.select = Mock(wraps=items.select)
     kwargs = {"sampling_rate": 16000}
     if original_text is not None:
         kwargs[processor._OMNI_PROMPT_TEXT_KEY] = original_text
@@ -36,9 +41,9 @@ def test_custom_processor_bridge_preserves_prompt_kwargs_and_passthrough(counts,
     items.select.assert_called_once_with({k for k, v in counts.items() if v > 0})
     processor._call_hf_processor.assert_called_once_with(
         "dummy" if original_text is None else original_text,
-        {"audios": ["wave"]},
+        {"audios": ["wave"]} if counts else {},
         {"sampling_rate": 16000},
         {},
     )
-    assert dict(result) == {"features": "processed", "embedding": "preserve"}
+    assert dict(result) == ({"features": "processed", "embedding": "preserve"} if counts else {"features": "processed"})
     assert kwargs == before

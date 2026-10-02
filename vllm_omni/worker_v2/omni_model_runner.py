@@ -499,6 +499,8 @@ class OmniGPUModelRunner(GPUModelRunner):
             self.update_requests(scheduler_output)
             self._sync_native_data_plane_payloads(scheduler_output)
             self.block_tables.apply_staged_writes()
+            if self.aux_output_connector is not None:
+                self.aux_output_connector.begin_step(scheduler_output.aux_output_connector_metadata)
             if scheduler_output.total_num_scheduled_tokens == 0:
                 empty_output = self.kv_connector.no_forward(scheduler_output)
                 return self._attach_native_data_plane_signals(
@@ -540,7 +542,7 @@ class OmniGPUModelRunner(GPUModelRunner):
 
         if not dummy_run:
             assert batch_req_state is not None
-            input_batch = self.prepare_inputs(scheduler_output, batch_req_state, batch_desc)
+            input_batch = self.prepare_inputs(scheduler_output, batch_req_state, batch_desc, num_active_loras)
             block_tables, slot_mappings = self.prepare_attn(input_batch)
             self.model_state.preprocess_state(
                 input_batch,
@@ -681,11 +683,6 @@ class OmniGPUModelRunner(GPUModelRunner):
         if not dummy_run and isinstance(hidden_states, torch.Tensor):
             self.model_state.run_postprocess(hidden_states, input_batch)
 
-        routed_experts = None
-        if not dummy_run and (capturer := self.routed_experts_capturer) is not None:
-            assert slot_mappings is not None
-            routed_experts = capturer.get_routed_experts(slot_mappings, num_toks)
-
         self.execute_model_state = ExecuteModelState(
             input_batch=input_batch,
             attn_metadata=attn_metadata,
@@ -695,7 +692,6 @@ class OmniGPUModelRunner(GPUModelRunner):
             finished_req_ids=scheduler_output.finished_req_ids,
             dp_sync=dp_sync,
             ec_connector_output=ec_connector_output,
-            routed_experts=routed_experts,
             cudagraph_stats=None,
         )
 

@@ -372,7 +372,7 @@ class MiMoAudioLLMMultiModalProcessor(OmniMultiModalProcessor[MiMoAudioLLMProces
 
         # Text-only input not supported in composite processor
         if not mm_data.get("audio", []):
-            prompt_ids = self._apply_hf_processor_tokens_only(prompt_ids)
+            prompt_ids = self._postprocess_prompt(prompt_ids)
 
             return BatchFeature(dict(input_ids=[prompt_ids]), tensor_type="pt")
 

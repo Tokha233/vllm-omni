@@ -48,6 +48,8 @@ from vllm.multimodal.parse import AudioProcessorItems, MultiModalDataItems, Mult
 from vllm.multimodal.processing import BaseDummyInputsBuilder, BaseMultiModalProcessor
 from vllm.multimodal.processing.processor import (
     BaseProcessingInfo,
+    MultiModalProcessingResult,
+    PlaceholderFeaturesInfo,
     ProcessorInputs,
     PromptReplacement,
     PromptUpdate,
@@ -874,39 +876,17 @@ class VoxtralTTSMultiModalProcessor(BaseMultiModalProcessor[VoxtralTTSProcessing
             ),
         ]
 
-    def _apply_hf_processor_mm_only(
-        self,
-        mm_items: MultiModalDataItems,
-        hf_processor_mm_kwargs: Mapping[str, object],
-        tokenization_kwargs: Mapping[str, object],
-    ) -> BatchFeature:
-        """
-        Apply the HF processor on the multi-modal data only.
-
-        Issue: Voxtral TTS use Mistral Tokenizer with custom audio encoder. It doesn't
-        inherit Transformers ProcessorMixin and can't use call_hf_processor_mm_only.
-
-        Solution: Override this method to call _apply_hf_processor_text_mm directly.
-        """
-        mm_counts = mm_items.get_all_counts()
-        _, mm_processed_data, _ = self._apply_hf_processor_text_mm(
-            prompt_text=self.dummy_inputs.get_dummy_text(mm_counts),
-            mm_items=mm_items,
-            hf_processor_mm_kwargs=hf_processor_mm_kwargs,
-            tokenization_kwargs=tokenization_kwargs,
-        )
-        return mm_processed_data
-
     def _maybe_apply_prompt_updates(
         self,
         mm_items: MultiModalDataItems,
-        prompt_ids: list[int],
-        mm_kwargs: MultiModalKwargsItems,
-        mm_prompt_updates,
-    ):
+        mm_res: MultiModalProcessingResult,
+    ) -> tuple[list[int], Mapping[str, list[PlaceholderFeaturesInfo]]]:
         # Voxtral's Mistral chat template has already inserted the complete
         # audio-token run, so locate it without applying the replacement again.
         mm_item_counts = mm_items.get_all_counts()
+        prompt_ids = mm_res.prompt_ids
+        mm_kwargs = mm_res.kwargs
+        mm_prompt_updates = mm_res.prompt_updates
         self._validate_mm_kwargs(mm_kwargs, mm_item_counts)
         self._validate_mm_updates(mm_prompt_updates, mm_item_counts)
         mm_placeholders = self._find_mm_placeholders(
