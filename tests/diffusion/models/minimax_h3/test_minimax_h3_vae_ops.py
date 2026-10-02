@@ -376,6 +376,7 @@ def test_h3_vae_dispatch_selects_supported_cuda_capabilities(monkeypatch):
     platform.is_available.return_value = True
     monkeypatch.setattr(dispatch, "HAS_TRITON", True)
     monkeypatch.setattr(dispatch, "current_omni_platform", platform)
+    monkeypatch.setattr(torch.version, "hip", None)
 
     for capability in (90, 100, 103, 120):
         platform.get_device_capability.return_value.to_int.return_value = capability
