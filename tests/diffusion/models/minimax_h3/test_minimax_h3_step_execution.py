@@ -678,7 +678,10 @@ def test_timestep_positions_preserve_interleaved_conditions(locked_audio, edit_t
             imgvid_cond_timestep=0.999,
             audio_ref_cond_timestep=1.0,
         )
-    assert not any(event.key == "aten::nonzero" for event in profile.key_averages())
+    keys = {event.key for event in profile.key_averages()}
+    assert "aten::fill_" in keys
+    assert "aten::index_fill_" in keys
+    assert "aten::nonzero" not in keys
     with pytest.raises(ValueError, match="video_target_timesteps rows 1 != target rows 2"):
         branch.fill_timesteps(
             output,

@@ -17,6 +17,8 @@ from vllm_omni.platforms import current_omni_platform
 
 
 def main() -> None:
+    if not current_omni_platform.is_cuda():
+        raise SystemExit("H3 timestep preparation microbench requires CUDA.")
     p = argparse.ArgumentParser()
     p.add_argument("--baseline", required=True)
     p.add_argument("--output", required=True)
