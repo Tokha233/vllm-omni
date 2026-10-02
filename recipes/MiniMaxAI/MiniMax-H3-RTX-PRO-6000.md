@@ -8,6 +8,7 @@ CPU offload and distributed layerwise offload are not required in any of
 these configurations.
 
 Validated on:
+
 - Host: YLX Y762
 - GPUs: 8 × RTX PRO 6000 Blackwell (96 GiB)
 - Device order: default (`CUDA_VISIBLE_DEVICES` not set)
@@ -233,6 +234,12 @@ layerwise offload.
 
 ## Target-hardware validation
 
+These measurements predate the SM120 exact VAE operator dispatch and decoder
+Linear FP16 precast. Their VAE decode, end-to-end, and memory figures have not
+been revalidated with that path enabled. The new operator evidence is limited
+to a single RTX 5090 D v2 using tiled eager decode; it does not validate these
+multi-GPU configurations or patch-parallel scaling.
+
 T2VA, 1344×768, `duration=5.0`, `fps=24`, 50 steps, `flow_shift=12`,
 `seed=1101`, BF16, `CUDNN_ATTN`, tiled VAE, one request at a time. Servers
 were started with the commands above — default device order, no NUMA
@@ -281,7 +288,7 @@ Peak memory falls by 11.05 GiB from two to four GPUs and by a further
 because all three configurations shard the DiT with TP2 and hold identical
 weights per GPU. Fitting the first two points gives:
 
-```
+```text
 peak HBM per GPU ≈ 55.4 GiB + 22.1 GiB / ulysses_degree
 ```
 

@@ -145,6 +145,12 @@ For Ref2VA, stop the FL2VA server and restart the same command with
 
 ## Target-hardware validation
 
+These measurements predate the SM120 exact VAE operator dispatch and decoder
+Linear FP16 precast. Their VAE decode, end-to-end, and memory figures have not
+been revalidated with that path enabled. The new operator evidence is limited
+to a single RTX 5090 D v2 using tiled eager decode; it does not validate these
+multi-GPU configurations, including the two-GPU DLO residency-staging route.
+
 All three configurations were exercised on a PCIe-only, dual-socket host with
 eight RTX PRO 5000 GPUs. The run used PyTorch 2.11.0+cu130, CUDA 13.0, driver
 580.95.05, 1344x768 output, 124 frames, and two warmups.

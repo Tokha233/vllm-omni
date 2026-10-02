@@ -34,13 +34,15 @@ kept separate so the evidence remains clear.
 
 SM120 was validated on one RTX 5090 D v2 (24 GB), driver 580.126.20,
 PyTorch 2.13.0+cu130, Triton 3.7.1, and vLLM 0.30.0. With official H3 VAE
-weights and FP16 decode autocast, a sampled `[1, 24, 37, 32, 48]` latent decoded
+weights, FP16 decode autocast, and the tiled eager `decode_latent` path, a sampled `[1, 24, 37, 32, 48]` latent decoded
 to 124 frames at 512x768. Warmed ABBA median decode latency decreased from
 6202.364 to 4631.699 ms (25.32%). RGB8 and pre-conversion FP32 output were
 bit-exact; three additional cropped, zero, and noise latent inputs also passed
 full FP32 equality. The small 195-row scaled-residual operator was slower in
 isolation; the complete decode improved. These are video-VAE measurements,
-not end-to-end generation or serving throughput. The capability `== 120`
+not end-to-end generation or serving throughput. Compile, untiled decode,
+DLO residency staging, and multi-GPU patch-parallel execution were not
+measured; compiled calls retain the reference path. The capability `== 120`
 allowlist also applies to the in-tree `MiniMax-H3-5090.md`,
 `MiniMax-H3-RTX-PRO-5000.md`, and `MiniMax-H3-RTX-PRO-6000.md` recipes,
 including configurations with `--vae-patch-parallel-size` greater than one.
