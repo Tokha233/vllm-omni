@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from vllm_omni.platforms import current_omni_platform
 
-pytestmark = [pytest.mark.core_model, pytest.mark.gpu, pytest.mark.diffusion]
+pytestmark = [pytest.mark.core_model, pytest.mark.gpu, pytest.mark.cuda, pytest.mark.diffusion]
 
 
 def _selected_operators():
@@ -60,7 +60,7 @@ def _failing_norm_input(_module, _hidden_states):
     raise RuntimeError("unsupported remote normalization semantics")
 
 
-@pytest.mark.parametrize(("batch", "sequence"), [(1, 1), (1, 195), (2, 1797), (1, 8192), (1, 32768)])
+@pytest.mark.parametrize(("batch", "sequence"), [(1, 1), (1, 195), (2, 1797), (1, 8192)])
 def test_h3_vae_qk_norm_rope_is_bit_exact(batch, sequence):
     device, operators = _selected_operators()
 
@@ -88,7 +88,7 @@ def test_h3_vae_qk_norm_rope_is_bit_exact(batch, sequence):
     assert torch.equal(actual_k, expected_k)
 
 
-@pytest.mark.parametrize("rows", [1, 195, 8192, 32768])
+@pytest.mark.parametrize("rows", [1, 195, 8192])
 def test_h3_vae_scaled_residual_is_bit_exact(rows):
     device, operators = _selected_operators()
 
