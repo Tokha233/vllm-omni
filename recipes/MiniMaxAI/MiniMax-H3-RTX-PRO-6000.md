@@ -24,7 +24,7 @@ Validated on:
 | Checkpoint storage | 135 GiB per partition | 135 GiB per partition | 135 GiB per partition |
 | Available system RAM | 200 GiB minimum | 200 GiB minimum | 200 GiB minimum |
 | Recommended system RAM | 384 GiB | 384 GiB | 384 GiB |
-| Measured peak HBM per GPU | 77.49 GiB | 66.44 GiB | 61.07 GiB |
+| Measured peak HBM per GPU (before SM120 exact VAE ops) | 77.49 GiB | 66.44 GiB | 61.07 GiB |
 
 `FL2VA` and `Ref2VA` are separate checkpoint partitions. Start one server at
 a time on a host sized for the minimum system-memory requirement, or pass

@@ -42,7 +42,9 @@ full FP32 equality. The small 195-row scaled-residual operator was slower in
 isolation; the complete decode improved. These are video-VAE measurements,
 not end-to-end generation or serving throughput. Compile, untiled decode,
 DLO residency staging, and multi-GPU patch-parallel execution were not
-measured; compiled calls retain the reference path. The capability `== 120`
+measured. Calls traced inside a compiled VAE region retain the reference path;
+regional DiT compilation alone leaves VAE decode eager and does not disable
+these VAE operators. The capability `== 120`
 allowlist also applies to the in-tree `MiniMax-H3-5090.md`,
 `MiniMax-H3-RTX-PRO-5000.md`, and `MiniMax-H3-RTX-PRO-6000.md` recipes,
 including configurations with `--vae-patch-parallel-size` greater than one.

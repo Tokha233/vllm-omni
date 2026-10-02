@@ -385,3 +385,10 @@ def test_h3_vae_dispatch_selects_supported_cuda_capabilities(monkeypatch):
     for capability in (89, 101, 110, 121):
         platform.get_device_capability.return_value.to_int.return_value = capability
         assert dispatch.resolve_h3_vae_operators(torch.device("cuda:0")) is None
+
+    monkeypatch.setattr(torch.version, "hip", "6.3.0")
+    platform.get_device_capability.reset_mock()
+    for capability in (90, 100, 103, 120):
+        platform.get_device_capability.return_value.to_int.return_value = capability
+        assert dispatch.resolve_h3_vae_operators(torch.device("cuda:0")) is None
+    platform.get_device_capability.assert_not_called()
