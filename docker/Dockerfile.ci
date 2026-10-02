@@ -44,9 +44,10 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 # Do NOT use a non-editable install here — that copies an empty stub into
 # site-packages and breaks ``import vllm_omni.entrypoints``.
 RUN uv pip install --system -e ".[dev]"
-# Fail the image build if dependency resolution replaced the selected vLLM
-# or its compiled CUDA runtime no longer imports.
-RUN python3 -c "import vllm, torch, flashinfer; import vllm._C_stable_libtorch; assert '${VLLM_PRECOMPILED_WHEEL_COMMIT}'[:8] in vllm.__version__, vllm.__version__"
+# Fail the image build if dependency resolution replaced the selected vLLM.
+# The CPU builder has no NVIDIA driver; CUDA imports are checked at the start
+# of each GPU test job by .buildkite/cuda/scripts/check_vllm_runtime.py.
+RUN python3 -c "import vllm; assert '${VLLM_PRECOMPILED_WHEEL_COMMIT}'[:8] in vllm.__version__, vllm.__version__"
 
 # The final stage just copies the working dir on top of the
 # dependencies image. This uses --link so that we can skip
