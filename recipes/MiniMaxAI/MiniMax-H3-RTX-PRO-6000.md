@@ -254,7 +254,7 @@ preceded each measured request.
 | Per step | 5.571 s | 3.375 s | 1.758 s |
 | VAE decode | 5.396 s | 2.791 s | 1.798 s |
 | Client E2E | 284.76 s | 172.32 s | 90.48 s |
-| Peak HBM per GPU | 77.49 GiB | 66.44 GiB | 61.07 GiB |
+| Peak HBM per GPU (before SM120 exact VAE ops) | 77.49 GiB | 66.44 GiB | 61.07 GiB |
 | Headroom below 96 GiB | 18.5 GiB | 29.6 GiB | 34.9 GiB |
 
 Stage times are read from the `X-Stage-Durations` response header of

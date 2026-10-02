@@ -1,8 +1,9 @@
 # MiniMax-H3 on RTX PRO 5000 Blackwell GPUs
 
 This recipe runs MiniMax-H3 in BF16 on 72 GiB RTX PRO 5000 Blackwell GPUs. It
-contains the validated two-GPU DLO configuration and the recommended resident
-configurations: TP1 x Ulysses2 with 20 resident layers on two GPUs, TP2 x
+contains the two-GPU DLO configuration validated before SM120 exact VAE ops
+and the recommended resident configurations: TP1 x Ulysses2 with 20 resident
+layers on two GPUs, TP2 x
 Ulysses2 on four GPUs, and TP4 x Ulysses2 on eight GPUs. The four- and
 eight-GPU routes do not require offload.
 
@@ -41,8 +42,9 @@ reproduce the same PCIe and NUMA relationships on the target host.
 
 ### Two GPUs
 
-Two 72 GiB cards require distributed layerwise offload. The validated route
-uses TP1 x Ulysses2, keeps 20 leading DiT layers resident, and streams
+Two 72 GiB cards require distributed layerwise offload. The route validated
+before SM120 exact VAE ops uses TP1 x Ulysses2, keeps 20 leading DiT layers
+resident, and streams
 rank-local weights without AllGather. Eager execution avoids regional-compile
 instability on this offload path.
 
