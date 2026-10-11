@@ -7,6 +7,7 @@ import importlib.util
 import json
 import statistics
 import time
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -97,13 +98,21 @@ def main() -> None:
             with torch.profiler.profile(
                 activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA]
             ) as prof:
-                fn(branches[arm], **kwargs)
+                with torch.profiler.record_function("h3_forward_kwargs"):
+                    fn(branches[arm], **kwargs)
             current_omni_platform.synchronize()
-            counts[arm] = [
-                {"key": e.key, "count": e.count}
-                for e in prof.key_averages()
-                if e.key == "aten::nonzero" or "Synchronize" in e.key
-            ]
+            # The profiler may synchronize while stopping. Only count events
+            # nested inside the preparation call, excluding profiler teardown.
+            scoped_counts = Counter()
+            for event in prof.events():
+                if event.name != "aten::nonzero" and "Synchronize" not in event.name:
+                    continue
+                parent = event.cpu_parent
+                while parent is not None and parent.name != "h3_forward_kwargs":
+                    parent = parent.cpu_parent
+                if parent is not None:
+                    scoped_counts[event.name] += 1
+            counts[arm] = [{"key": key, "count": count} for key, count in sorted(scoped_counts.items())]
         report["cases"].append(
             {
                 "sequence": branch.seq_len,
